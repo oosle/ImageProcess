@@ -49,8 +49,8 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Classes\Bitmap.cs" />
-    <Compile Include="Classes\Utility.cs" />
+    <Compile Include="Source\Bitmap.cs" />
+    <Compile Include="Source\Utility.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
