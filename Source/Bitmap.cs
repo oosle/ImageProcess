@@ -1520,6 +1520,7 @@ namespace ImageProcess
         /// </summary>
         /// <param name="X">X co-ordinate value to set</param>
         /// <param name="Y">Y co-ordinate value to set</param>
+        /// <param name="col">Colour to apply to pixel</param>
         public void SetPixel(int x, int y, Draw.Color col)
         {
             try
@@ -1531,7 +1532,7 @@ namespace ImageProcess
             }
             catch (Exception ex)
             {
-                throw new BitmapException("SetPixel(x, y)", ex);
+                throw new BitmapException("SetPixel(x, y, col)", ex);
             }
         }
 
@@ -1555,7 +1556,7 @@ namespace ImageProcess
             }
             catch (Exception ex)
             {
-                throw new BitmapException("DrawText(x, y, text, font, size)", ex);
+                throw new BitmapException("DrawText(x, y, text, font, size, col)", ex);
             }
         }
 
