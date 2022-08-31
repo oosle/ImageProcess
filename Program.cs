@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Diagnostics;
+using Draw = System.Drawing;
 
 namespace ImageProcess
 {
@@ -43,6 +44,7 @@ namespace ImageProcess
                                 bitmap.Resize(25);
                                 bitmap.Rotate180();
                                 bitmap.Grayscale_8Bpp();
+                                bitmap.DrawText(2, 2, "HELLO WORLD!!", "Tahoma", 15, Draw.Color.Blue);
 
                                 // Re-encode the new transformed image and output it
                                 byte[] data = bitmap.EncodePng();

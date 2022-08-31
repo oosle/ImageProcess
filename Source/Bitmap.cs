@@ -1,6 +1,6 @@
 ﻿using System;
 using System.IO;
-using System.Drawing;
+using Draw = System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
 using System.Runtime.Serialization;
@@ -8,6 +8,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using static System.Net.Mime.MediaTypeNames;
+using System.Drawing.Text;
 
 namespace ImageProcess
 {
@@ -61,11 +63,14 @@ namespace ImageProcess
         BiCubic
     };
 
+    /// <summary>
+    /// BitmapBase class, this is currently using GDI+, needs porting to Direct2D (DirectX).
+    /// </summary>
     public interface IBitmapBase : IDisposable
     {
-        Bitmap Image { get; set; }
+        Draw.Bitmap Image { get; set; }
         ImageFormat ImageFormat { get; }
-        System.Drawing.Imaging.PixelFormat PixelFormat { get; }
+        Draw.Imaging.PixelFormat PixelFormat { get; }
         float BytesPerPixel { get; }
         int OrigWidth  { get; }
         int OrigHeight { get; }
@@ -74,11 +79,11 @@ namespace ImageProcess
 
         void SetResampleMode(ResampleMode mode);
         void Create(int width, int height);
-        void Create(int width, int height, System.Drawing.Imaging.PixelFormat format);
+        void Create(int width, int height, Draw.Imaging.PixelFormat format);
         void Reset();
         void Load(string file);
         void Load(MemoryStream data);
-        void Load(Image data);
+        void Load(Draw.Image data);
         void Save(string file);
         void Save(MemoryStream data);
         void Save(MemoryStream data, string format);
@@ -98,6 +103,11 @@ namespace ImageProcess
         void Contrast(float percent);
         void Reduce_1Bpp(float percent);
 
+        // Some new methods for things like overlays
+        Draw.Color GetPixel(int x, int y);
+        void SetPixel(int x, int y, Draw.Color col);
+        void DrawText(int x, int y, string text, string font, int size, Draw.Color col);
+
         // Really handy image encoding routines as part of the class
         byte[] ImageData(out int stride);
         byte[] EncodeJpeg(int quality);
@@ -114,12 +124,12 @@ namespace ImageProcess
         #region General property declarations for the library
 
         private InterpolationMode _mode = InterpolationMode.NearestNeighbor;
-        private Bitmap _orig;
-        private Bitmap _tran;
+        private Draw.Bitmap _orig;
+        private Draw.Bitmap _tran;
         private ImageFormat _fmt = ImageFormat.MemoryBmp;
         private int rgbThresholdValue = 80; // Default percentage level for 1bpp operations
 
-        public Bitmap Image
+        public Draw.Bitmap Image
         {
             get => _tran;
             set
@@ -132,8 +142,8 @@ namespace ImageProcess
         public ImageFormat ImageFormat
             => (_tran != null ? _fmt : ImageFormat.MemoryBmp);
 
-        public System.Drawing.Imaging.PixelFormat PixelFormat
-            => (_tran?.PixelFormat ?? System.Drawing.Imaging.PixelFormat.DontCare);
+        public Draw.Imaging.PixelFormat PixelFormat
+            => (_tran?.PixelFormat ?? Draw.Imaging.PixelFormat.DontCare);
 
         public float BytesPerPixel
             => (_tran != null ? GetBytesPerPixel(_tran) : 0f);
@@ -168,8 +178,8 @@ namespace ImageProcess
             try
             {
                 SetupResampleMode(ResampleMode.Nearest);
-                _orig = new Bitmap(file);
-                _tran = new Bitmap(file);
+                _orig = new Draw.Bitmap(file);
+                _tran = new Draw.Bitmap(file);
                 _fmt = FindFormat(file);
             }
             catch (Exception ex)
@@ -184,8 +194,8 @@ namespace ImageProcess
             try
             {
                 SetupResampleMode(ResampleMode.Nearest);
-                _orig = new Bitmap(data);
-                _tran = new Bitmap(data);
+                _orig = new Draw.Bitmap(data);
+                _tran = new Draw.Bitmap(data);
                 _fmt = FindFormat(data);
             }
             catch (Exception ex)
@@ -195,14 +205,14 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public BitmapWin(Image image)
+        public BitmapWin(Draw.Image image)
         {
             try
             {
                 SetupResampleMode(ResampleMode.Nearest);
-                _orig = new Bitmap(image);
-                _tran = new Bitmap(image);
-                _fmt = FindFormat((Bitmap)image);
+                _orig = new Draw.Bitmap(image);
+                _tran = new Draw.Bitmap(image);
+                _fmt = FindFormat((Draw.Bitmap)image);
             }
             catch (Exception ex)
             {
@@ -216,8 +226,8 @@ namespace ImageProcess
             try
             {
                 SetupResampleMode(ResampleMode.Nearest);
-                _orig = new Bitmap(width, height);
-                _tran = new Bitmap(width, height);
+                _orig = new Draw.Bitmap(width, height);
+                _tran = new Draw.Bitmap(width, height);
                 _fmt = ImageFormat.MemoryBmp;
             }
             catch (Exception ex)
@@ -227,13 +237,13 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public BitmapWin(int width, int height, System.Drawing.Imaging.PixelFormat format)
+        public BitmapWin(int width, int height, Draw.Imaging.PixelFormat format)
         {
             try
             {
                 SetupResampleMode(ResampleMode.Nearest);
-                _orig = new Bitmap(width, height, format);
-                _tran = new Bitmap(width, height, format);
+                _orig = new Draw.Bitmap(width, height, format);
+                _tran = new Draw.Bitmap(width, height, format);
                 _fmt = ImageFormat.MemoryBmp;
             }
             catch (Exception ex)
@@ -263,15 +273,15 @@ namespace ImageProcess
         // UTILITY (PRIVATE) --------------------------------------------------------------------------------
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int BytesPerPixelStandard(Bitmap src)
+        private int BytesPerPixelStandard(Draw.Bitmap src)
         {
             int bpp;
 
             switch (src.PixelFormat)
             {
-                case System.Drawing.Imaging.PixelFormat.Format24bppRgb: bpp = 3; break;
-                case System.Drawing.Imaging.PixelFormat.Format32bppArgb: bpp = 4; break;
-                case System.Drawing.Imaging.PixelFormat.Format32bppRgb: bpp = 4; break;
+                case Draw.Imaging.PixelFormat.Format24bppRgb: bpp = 3; break;
+                case Draw.Imaging.PixelFormat.Format32bppArgb: bpp = 4; break;
+                case Draw.Imaging.PixelFormat.Format32bppRgb: bpp = 4; break;
                 default: throw new BitmapException("Image format not supported.");
             }
 
@@ -279,7 +289,7 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private float GetBytesPerPixel(Bitmap src)
+        private float GetBytesPerPixel(Draw.Bitmap src)
         {
             float depth = 0.0f;
 
@@ -289,41 +299,41 @@ namespace ImageProcess
                 {
                     switch (src.PixelFormat)
                     {
-                        case System.Drawing.Imaging.PixelFormat.Format1bppIndexed:
+                        case Draw.Imaging.PixelFormat.Format1bppIndexed:
                             depth = 0.125f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format4bppIndexed:
+                        case Draw.Imaging.PixelFormat.Format4bppIndexed:
                             depth = 0.5f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format8bppIndexed:
+                        case Draw.Imaging.PixelFormat.Format8bppIndexed:
                             depth = 1.0f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format16bppArgb1555:
-                        case System.Drawing.Imaging.PixelFormat.Format16bppGrayScale:
-                        case System.Drawing.Imaging.PixelFormat.Format16bppRgb555:
-                        case System.Drawing.Imaging.PixelFormat.Format16bppRgb565:
+                        case Draw.Imaging.PixelFormat.Format16bppArgb1555:
+                        case Draw.Imaging.PixelFormat.Format16bppGrayScale:
+                        case Draw.Imaging.PixelFormat.Format16bppRgb555:
+                        case Draw.Imaging.PixelFormat.Format16bppRgb565:
                             depth = 2.0f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format24bppRgb:
+                        case Draw.Imaging.PixelFormat.Format24bppRgb:
                             depth = 3.0f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format32bppArgb:
-                        case System.Drawing.Imaging.PixelFormat.Format32bppPArgb:
-                        case System.Drawing.Imaging.PixelFormat.Format32bppRgb:
+                        case Draw.Imaging.PixelFormat.Format32bppArgb:
+                        case Draw.Imaging.PixelFormat.Format32bppPArgb:
+                        case Draw.Imaging.PixelFormat.Format32bppRgb:
                             depth = 4.0f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format48bppRgb:
+                        case Draw.Imaging.PixelFormat.Format48bppRgb:
                             depth = 6.0f;
                             break;
 
-                        case System.Drawing.Imaging.PixelFormat.Format64bppArgb:
-                        case System.Drawing.Imaging.PixelFormat.Format64bppPArgb:
+                        case Draw.Imaging.PixelFormat.Format64bppArgb:
+                        case Draw.Imaging.PixelFormat.Format64bppPArgb:
                             depth = 8.0f;
                             break;
 
@@ -391,10 +401,10 @@ namespace ImageProcess
                 imgData = data.ToArray();
                 result = FindFormat(imgData);
             }
-            else if (obj is Bitmap)
+            else if (obj is Draw.Bitmap)
             {
                 // Raw byte data read by serializing bitmap class, extension method
-                Bitmap bmp = (Bitmap)obj;
+                Draw.Bitmap bmp = (Draw.Bitmap)obj;
                 imgData = bmp.ToByteArray();
                 result = FindFormat(imgData);
             }
@@ -426,15 +436,15 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Bitmap ResizeImage(Bitmap src, int width, int height)
+        private Draw.Bitmap ResizeImage(Draw.Bitmap src, int width, int height)
         {
-            Bitmap dest = new Bitmap(width, height);
-            using (Graphics g = Graphics.FromImage(dest))
+            Draw.Bitmap dest = new Draw.Bitmap(width, height);
+            using (Draw.Graphics g = Draw.Graphics.FromImage(dest))
             {
                 g.InterpolationMode = _mode;
                 g.CompositingQuality = CompositingQuality.HighSpeed;
                 g.CompositingMode = CompositingMode.SourceCopy;
-                g.DrawImage(src, new Rectangle(0, 0, width, height));
+                g.DrawImage(src, new Draw.Rectangle(0, 0, width, height));
                 g.Save();
             }
 
@@ -442,10 +452,10 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe Bitmap Grayscale(Bitmap src)
+        private unsafe Draw.Bitmap Grayscale(Draw.Bitmap src)
         {
-            Bitmap bmp = (Bitmap)src.Clone();
-            Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            Draw.Bitmap bmp = (Draw.Bitmap)src.Clone();
+            Draw.Rectangle rect = new Draw.Rectangle(0, 0, bmp.Width, bmp.Height);
             BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadWrite, bmp.PixelFormat);
             int bytesPerPixel = BytesPerPixelStandard(src);
 
@@ -469,27 +479,27 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe Bitmap Grayscale_8Bpp(Bitmap src)
+        private unsafe Draw.Bitmap Grayscale_8Bpp(Draw.Bitmap src)
         {
             int w = src.Width;
             int h = src.Height;
             int bytesPerPixel = BytesPerPixelStandard(src);
 
             // Create the new bitmap
-            Bitmap dest = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+            Draw.Bitmap dest = new Draw.Bitmap(w, h, Draw.Imaging.PixelFormat.Format8bppIndexed);
 
             // Build a grayscale color Palette
             ColorPalette palette = dest.Palette;
             for (int i = 0; i < 256; i++)
             {
-                palette.Entries[i] = System.Drawing.Color.FromArgb(255, i, i, i);
+                palette.Entries[i] = Draw.Color.FromArgb(255, i, i, i);
             }
             dest.Palette = palette;
 
             // No need to convert formats if already in 8 bit
-            if (src.PixelFormat == System.Drawing.Imaging.PixelFormat.Format8bppIndexed)
+            if (src.PixelFormat == Draw.Imaging.PixelFormat.Format8bppIndexed)
             {
-                dest = (Bitmap)src.Clone();
+                dest = (Draw.Bitmap)src.Clone();
 
                 // Make sure palette is grayscale palette and not some other 8-bit indexed palette
                 dest.Palette = palette;
@@ -499,10 +509,10 @@ namespace ImageProcess
 
             // Lock the images
             BitmapData srcData =
-                src.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, src.PixelFormat);
+                src.LockBits(new Draw.Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, src.PixelFormat);
             BitmapData destData =
-                dest.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly,
-                System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+                dest.LockBits(new Draw.Rectangle(0, 0, w, h), ImageLockMode.WriteOnly,
+                Draw.Imaging.PixelFormat.Format8bppIndexed);
 
             int srcStride = srcData.Stride;
             int destStride = destData.Stride;
@@ -535,18 +545,18 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Bitmap RotateBitmap(Bitmap bmp, float angle)
+        private Draw.Bitmap RotateBitmap(Draw.Bitmap bmp, float angle)
         {
-            System.Drawing.Drawing2D.Matrix origin = new System.Drawing.Drawing2D.Matrix();
+            Draw.Drawing2D.Matrix origin = new Draw.Drawing2D.Matrix();
             origin.Rotate(angle);
 
             // Rotate the image corners to see how big it will be after rotation
-            PointF[] points =
+            Draw.PointF[] points =
             {
-                new PointF(0, 0),
-                new PointF(bmp.Width, 0),
-                new PointF(bmp.Width, bmp.Height),
-                new PointF(0, bmp.Height),
+                new Draw.PointF(0, 0),
+                new Draw.PointF(bmp.Width, 0),
+                new Draw.PointF(bmp.Width, bmp.Height),
+                new Draw.PointF(0, bmp.Height),
             };
             origin.TransformPoints(points);
 
@@ -556,14 +566,14 @@ namespace ImageProcess
             // Make a bitmap to hold the rotated result
             int width = (int)Math.Round(xmax - xmin);
             int height = (int)Math.Round(ymax - ymin);
-            Bitmap result = new Bitmap(width, height, bmp.PixelFormat);
+            Draw.Bitmap result = new Draw.Bitmap(width, height, bmp.PixelFormat);
 
             // Create the real rotation transformation
-            System.Drawing.Drawing2D.Matrix centre = new System.Drawing.Drawing2D.Matrix();
-            centre.RotateAt(angle, new PointF(width / 2f, height / 2f));
+            Draw.Drawing2D.Matrix centre = new Draw.Drawing2D.Matrix();
+            centre.RotateAt(angle, new Draw.PointF(width / 2f, height / 2f));
 
             // Draw the image onto the new bitmap rotated
-            using (Graphics g = Graphics.FromImage(result))
+            using (Draw.Graphics g = Draw.Graphics.FromImage(result))
             {
                 g.InterpolationMode = this._mode;
                 g.CompositingQuality = CompositingQuality.HighSpeed;
@@ -573,14 +583,14 @@ namespace ImageProcess
                 // Draw the image centered on the bitmap
                 int x = (width - bmp.Width) / 2;
                 int y = (height - bmp.Height) / 2;
-                g.DrawImage(bmp, new Rectangle(x, y, bmp.Width, bmp.Height));
+                g.DrawImage(bmp, new Draw.Rectangle(x, y, bmp.Width, bmp.Height));
             }
 
             return (result);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Bitmap AdjustBrightness(Bitmap src, float percent)
+        private Draw.Bitmap AdjustBrightness(Draw.Bitmap src, float percent)
         {
             float b = (percent >= 0.0f && percent <= 100.0f) ? (100.0f + percent) / 100.0f : 1.0f;
             var matrix = new ColorMatrix(
@@ -597,31 +607,31 @@ namespace ImageProcess
             ImageAttributes attrib = new ImageAttributes();
             attrib.SetColorMatrix(matrix);
 
-            Point[] points =
+            Draw.Point[] points =
             {
-                new Point(0, 0),
-                new Point(src.Width, 0),
-                new Point(0, src.Height - 1),
+                new Draw.Point(0, 0),
+                new Draw.Point(src.Width, 0),
+                new Draw.Point(0, src.Height - 1),
             };
-            Rectangle rect = new Rectangle(0, 0, src.Width, src.Height);
+            Draw.Rectangle rect = new Draw.Rectangle(0, 0, src.Width, src.Height);
 
-            Bitmap dest = new Bitmap(src.Width, src.Height);
-            using (Graphics g = Graphics.FromImage(dest))
+            Draw.Bitmap dest = new Draw.Bitmap(src.Width, src.Height);
+            using (Draw.Graphics g = Draw.Graphics.FromImage(dest))
             {
                 g.InterpolationMode = _mode;
                 g.CompositingQuality = CompositingQuality.HighSpeed;
-                g.DrawImage(src, points, rect, GraphicsUnit.Pixel, attrib);
+                g.DrawImage(src, points, rect, Draw.GraphicsUnit.Pixel, attrib);
             }
 
             return (dest);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe Bitmap AdjustContrast(Bitmap src, float percent)
+        private unsafe Draw.Bitmap AdjustContrast(Draw.Bitmap src, float percent)
         {
             float c = (percent >= 0.0f && percent <= 100.0f) ? (100.0f + percent) / 100.0f : 1.0f;
-            Bitmap bmp = (Bitmap)src.Clone();
-            Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            Draw.Bitmap bmp = (Draw.Bitmap)src.Clone();
+            Draw.Rectangle rect = new Draw.Rectangle(0, 0, bmp.Width, bmp.Height);
             BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadWrite, bmp.PixelFormat);
             int bytesPerPixel = BytesPerPixelStandard(src);
             byte[] contrastLookup = new byte[256];
@@ -669,23 +679,23 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe Bitmap Reduce_1Bpp(Bitmap src, int threshold)
+        private unsafe Draw.Bitmap Reduce_1Bpp(Draw.Bitmap src, int threshold)
         {
             int th = (threshold >= 0 && threshold <= 255) ? threshold : 128;
             int bytesPerPixel = BytesPerPixelStandard(src);
 
             // Create new destination bitmap, dimensions of original and 1bpp
-            Bitmap dest = new Bitmap(src.Width, src.Height,
-                System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+            Draw.Bitmap dest = new Draw.Bitmap(src.Width, src.Height,
+                Draw.Imaging.PixelFormat.Format1bppIndexed);
 
             // Lock the images to obtain the image data
             BitmapData srcData = src.LockBits(
-                new Rectangle(0, 0, src.Width, src.Height),
+                new Draw.Rectangle(0, 0, src.Width, src.Height),
                 ImageLockMode.ReadOnly, src.PixelFormat);
 
             BitmapData destData = dest.LockBits(
-                new Rectangle(0, 0, dest.Width, dest.Height),
-                ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+                new Draw.Rectangle(0, 0, dest.Width, dest.Height),
+                ImageLockMode.WriteOnly, Draw.Imaging.PixelFormat.Format1bppIndexed);
 
             for (int y = 0; y < srcData.Height; y++)
             {
@@ -717,6 +727,33 @@ namespace ImageProcess
             return (dest);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Draw.Bitmap DrawText(
+            Draw.Bitmap src, int x, int y, string text, string font, int size, Draw.Brush col)
+        {
+            Draw.Bitmap dest = new Draw.Bitmap(src.Width, src.Height);
+
+            using (Draw.Graphics g = Draw.Graphics.FromImage(dest))
+            {
+                Draw.RectangleF rect = new Draw.RectangleF(x, y, src.Width, src.Height);
+
+                // Render the original bitmap into new blank bitmap
+                g.DrawImage(src, 0, 0);
+                
+                // Setup the text rendering parameters
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.InterpolationMode = _mode;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+                // Now overlay the required text on the original bitmap
+                g.DrawString(text, new Draw.Font(font, size), col, rect); 
+                g.Flush();
+            }
+
+            return (dest);
+        }
+
         #endregion
 
         #region Image encoding routines (JPEG, PNG, BMP, GIF, TIFF)
@@ -724,9 +761,9 @@ namespace ImageProcess
         // IMAGE ENCODING (PRIVATE) -------------------------------------------------------------------------
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] GetImageData(Bitmap bmp, out int stride)
+        private byte[] GetImageData(Draw.Bitmap bmp, out int stride)
         {
-            var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            var rect = new Draw.Rectangle(0, 0, bmp.Width, bmp.Height);
             var data = bmp.LockBits(rect, ImageLockMode.ReadOnly, bmp.PixelFormat);
             var length = data.Stride * data.Height;
             byte[] bytes = new byte[length];
@@ -740,7 +777,7 @@ namespace ImageProcess
 
         // Image encoding for the newer image standards: JPEG, PNG, BMP
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private BitmapSource EncodeBitmap(Bitmap bmp)
+        private BitmapSource EncodeBitmap(Draw.Bitmap bmp)
         {
             int width = bmp.Width;
             int height = bmp.Height;
@@ -749,69 +786,69 @@ namespace ImageProcess
             byte[] imgData = GetImageData(bmp, out int stride);
             BitmapSource image;
 
-            if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format1bppIndexed)
+            if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format1bppIndexed)
             {
                 // Black and white image, usually a TIFF is the source, use that pixel format
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Indexed1, BitmapPalettes.BlackAndWhite, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format8bppIndexed)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format8bppIndexed)
             {
                 // Assume grayscale as that is the only routine that returns that pixel format
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Indexed8, BitmapPalettes.Gray256, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format16bppArgb1555)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format16bppArgb1555)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgr555, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format16bppGrayScale)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format16bppGrayScale)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Default, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format16bppRgb555)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format16bppRgb555)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgr555, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format16bppRgb565)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format16bppRgb565)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgr565, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format24bppRgb)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format24bppRgb)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgr24, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppArgb)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format32bppArgb)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgra32, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format32bppPArgb)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Pbgra32, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppRgb)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format32bppRgb)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Bgr32, null, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format48bppRgb)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format48bppRgb)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
@@ -827,7 +864,7 @@ namespace ImageProcess
 
         // Image encoding for the old image standards (been around for donkeys years): GIF, TIFF
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private BitmapSource EncodeBitmapOld(Bitmap bmp)
+        private BitmapSource EncodeBitmapOld(Draw.Bitmap bmp)
         {
             int width = bmp.Width;
             int height = bmp.Height;
@@ -836,19 +873,19 @@ namespace ImageProcess
             byte[] imgData = GetImageData(bmp, out int stride);
             BitmapSource image;
 
-            if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format1bppIndexed)
+            if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format1bppIndexed)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Indexed1, BitmapPalettes.BlackAndWhite, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format4bppIndexed)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format4bppIndexed)
             {
                 image = BitmapSource.Create(
                     width, height, horz, vert,
                     PixelFormats.Indexed4, BitmapPalettes.Halftone8, imgData, stride);
             }
-            else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format8bppIndexed)
+            else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format8bppIndexed)
             {
                 // Assume grayscale as that is the only routine in here that returns that pixel format
                 image = BitmapSource.Create(
@@ -864,7 +901,7 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] EncodeJpegData(Bitmap bmp, int quality)
+        private byte[] EncodeJpegData(Draw.Bitmap bmp, int quality)
         {
             using (MemoryStream stream = new MemoryStream())
             {
@@ -883,7 +920,7 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] EncodePngData(Bitmap bmp)
+        private byte[] EncodePngData(Draw.Bitmap bmp)
         {
             using (MemoryStream stream = new MemoryStream())
             {
@@ -897,7 +934,7 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] EncodeBmpData(Bitmap bmp)
+        private byte[] EncodeBmpData(Draw.Bitmap bmp)
         {
             using (MemoryStream stream = new MemoryStream())
             {
@@ -911,7 +948,7 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] EncodeGifData(Bitmap bmp)
+        private byte[] EncodeGifData(Draw.Bitmap bmp)
         {
             using (MemoryStream stream = new MemoryStream())
             {
@@ -925,17 +962,17 @@ namespace ImageProcess
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] EncodeTiffData(Bitmap bmp)
+        private byte[] EncodeTiffData(Draw.Bitmap bmp)
         {
             using (MemoryStream stream = new MemoryStream())
             {
                 TiffBitmapEncoder encoder = new TiffBitmapEncoder();
 
-                if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format1bppIndexed)
+                if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format1bppIndexed)
                     encoder.Compression = TiffCompressOption.Ccitt3;
-                else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format4bppIndexed)
+                else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format4bppIndexed)
                     encoder.Compression = TiffCompressOption.Zip;
-                else if (bmp.PixelFormat == System.Drawing.Imaging.PixelFormat.Format8bppIndexed)
+                else if (bmp.PixelFormat == Draw.Imaging.PixelFormat.Format8bppIndexed)
                     encoder.Compression = TiffCompressOption.Zip;
 
                 encoder.Frames.Add(BitmapFrame.Create(EncodeBitmapOld(bmp)));
@@ -978,9 +1015,9 @@ namespace ImageProcess
             try
             {
                 _orig?.Dispose();
-                _orig = new Bitmap(width, height);
+                _orig = new Draw.Bitmap(width, height);
                 _tran?.Dispose();
-                _tran = new Bitmap(width, height);
+                _tran = new Draw.Bitmap(width, height);
             }
             catch (Exception ex)
             {
@@ -993,16 +1030,16 @@ namespace ImageProcess
         /// </summary>
         /// <param name="width">Width in pixels</param>
         /// <param name="height">Height in pixels</param>
-        /// <param name="format">Requied pixel format</param>
+        /// <param name="format">Required pixel format</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Create(int width, int height, System.Drawing.Imaging.PixelFormat format)
+        public void Create(int width, int height, Draw.Imaging.PixelFormat format)
         {
             try
             {
                 _orig?.Dispose();
-                _orig = new Bitmap(width, height, format);
+                _orig = new Draw.Bitmap(width, height, format);
                 _tran?.Dispose();
-                _tran = new Bitmap(width, height, format);
+                _tran = new Draw.Bitmap(width, height, format);
             }
             catch (Exception ex)
             {
@@ -1021,7 +1058,7 @@ namespace ImageProcess
                 if (_orig != null)
                 {
                     _tran?.Dispose();
-                    _tran = new Bitmap(_orig);
+                    _tran = new Draw.Bitmap(_orig);
                 }
             }
             catch (Exception ex)
@@ -1040,9 +1077,9 @@ namespace ImageProcess
             try
             {
                 _orig?.Dispose();
-                _orig = new Bitmap(file);
+                _orig = new Draw.Bitmap(file);
                 _tran?.Dispose();
-                _tran = new Bitmap(file);
+                _tran = new Draw.Bitmap(file);
                 _fmt = FindFormat(file);
             }
             catch (Exception ex)
@@ -1061,9 +1098,9 @@ namespace ImageProcess
             try
             {
                 _orig?.Dispose();
-                _orig = new Bitmap(data);
+                _orig = new Draw.Bitmap(data);
                 _tran?.Dispose();
-                _tran = new Bitmap(data);
+                _tran = new Draw.Bitmap(data);
                 _fmt = FindFormat(data);
             }
             catch (Exception ex)
@@ -1077,15 +1114,15 @@ namespace ImageProcess
         /// </summary>
         /// <param name="image">The image to load</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Load(Image image)
+        public void Load(Draw.Image image)
         {
             try
             {
                 _orig?.Dispose();
-                _orig = new Bitmap(image);
+                _orig = new Draw.Bitmap(image);
                 _tran?.Dispose();
-                _tran = new Bitmap(image);
-                _fmt = FindFormat((Bitmap)image);
+                _tran = new Draw.Bitmap(image);
+                _fmt = FindFormat((Draw.Bitmap)image);
             }
             catch (Exception ex)
             {
@@ -1259,8 +1296,8 @@ namespace ImageProcess
             {
                 if (_orig != null && _tran != null)
                 {
-                    Rectangle rect = new Rectangle(x, y, width, height);
-                    _tran = _tran.Clone(rect, System.Drawing.Imaging.PixelFormat.DontCare);
+                    Draw.Rectangle rect = new Draw.Rectangle(x, y, width, height);
+                    _tran = _tran.Clone(rect, Draw.Imaging.PixelFormat.DontCare);
                 }
             }
             catch (Exception ex)
@@ -1309,7 +1346,7 @@ namespace ImageProcess
         {
             try
             {
-                _tran?.RotateFlip(RotateFlipType.Rotate90FlipNone);
+                _tran?.RotateFlip(Draw.RotateFlipType.Rotate90FlipNone);
             }
             catch (Exception ex)
             {
@@ -1325,7 +1362,7 @@ namespace ImageProcess
         {
             try
             {
-                _tran?.RotateFlip(RotateFlipType.Rotate180FlipNone);
+                _tran?.RotateFlip(Draw.RotateFlipType.Rotate180FlipNone);
             }
             catch (Exception ex)
             {
@@ -1341,7 +1378,7 @@ namespace ImageProcess
         {
             try
             {
-                _tran?.RotateFlip(RotateFlipType.Rotate270FlipNone);
+                _tran?.RotateFlip(Draw.RotateFlipType.Rotate270FlipNone);
             }
             catch (Exception ex)
             {
@@ -1357,7 +1394,7 @@ namespace ImageProcess
         {
             try
             {
-                _tran?.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                _tran?.RotateFlip(Draw.RotateFlipType.RotateNoneFlipX);
             }
             catch (Exception ex)
             {
@@ -1373,7 +1410,7 @@ namespace ImageProcess
         {
             try
             {
-                _tran?.RotateFlip(RotateFlipType.RotateNoneFlipY);
+                _tran?.RotateFlip(Draw.RotateFlipType.RotateNoneFlipY);
             }
             catch (Exception ex)
             {
@@ -1455,6 +1492,76 @@ namespace ImageProcess
                 throw new BitmapException("Reduce_1Bpp(percent)", ex);
             }
         }
+
+        #endregion
+
+        #region New public API methods for overlay processing
+
+        /// <summary>
+        /// Return the RGB pixel value from the transformed image at the specified X, Y co-ordinate.
+        /// </summary>
+        /// <param name="X">X co-ordinate value to query</param>
+        /// <param name="Y">Y co-ordinate value to query</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Draw.Color GetPixel(int x, int y)
+        {
+            try
+            {
+                return ((_orig != null && _tran != null) ? _tran.GetPixel(x, y) : Draw.Color.Black);
+            }
+            catch (Exception ex)
+            {
+                throw new BitmapException("GetPixel(x, y)", ex);
+            }
+        }
+
+        /// <summary>
+        /// Set the RGB pixel value in the transformed image at the specified X, Y co-ordinate.
+        /// </summary>
+        /// <param name="X">X co-ordinate value to set</param>
+        /// <param name="Y">Y co-ordinate value to set</param>
+        public void SetPixel(int x, int y, Draw.Color col)
+        {
+            try
+            {
+                if (_orig != null && _tran != null)
+                {
+                    _tran.SetPixel(x, y, col);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new BitmapException("SetPixel(x, y)", ex);
+            }
+        }
+
+        /// <summary>
+        /// Allows text to be drawn at the specified X, Y co-ordinates with font, size and colour.
+        /// </summary>
+        /// <param name="X">X co-ordinate value to start at</param>
+        /// <param name="Y">Y co-ordinate value to start at</param>
+        /// <param name="text">Text string to draw on the bitmap</param>
+        /// <param name="font">Font to use to draw the text</param>
+        /// <param name="size">Font size to use</param>
+        /// <param name="col">Text colour to apply</param>
+        public void DrawText(int x, int y, string text, string font, int size, Draw.Color col)
+        {
+            try
+            {
+                if (_orig != null && _tran != null)
+                {
+                    _tran = DrawText(_tran, x, y, text, font, size, new Draw.SolidBrush(col));
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new BitmapException("DrawText(x, y, text, font, size)", ex);
+            }
+        }
+
+        #endregion
+
+        #region Image encoding methods for varying image types
 
         /// <summary>
         /// Returns image data and scan line stride length, C# bitmap object does not allow this easily.
